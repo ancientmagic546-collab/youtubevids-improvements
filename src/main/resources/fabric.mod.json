@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "youtubevids",
+  "version": "${version}",
+  "name": "YouTube Vids Improvements",
+  "description": "Minecraft Improvements for YouTubers",
+  "authors": ["YouTube Vids"],
+  "license": "CC0-1.0",
+  "icon": "assets/youtubevids/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.youtubevids.YouTubeVidsClient"]
+  },
+  "mixins": [
+    {
+      "config": "youtubevids.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
