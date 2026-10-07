@@ -23,17 +23,21 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+        with:
+          gradle-version: '9.7.1'
 
       - name: Build with Gradle
-        run: ./gradlew build --no-daemon
+        run: gradle build --no-daemon
 
       - name: Find JAR
         id: jar
         run: |
-          JAR=$(find build/libs -name 'youtubevids-*.jar'  -name '*-dev.jar'  -name '*-javadoc.jar' | head -1)
+          JAR=$(find build/libs -name 'youtubevids-*.jar' ! -name '*-sources.jar' ! -name '*-dev.jar' ! -name '*-javadoc.jar' | head -1)
+          if [ -z "$JAR" ]; then
+            echo "No JAR found in build/libs"
+            ls -la build/libs/ || true
+            exit 1
+          fi
           echo "path=$JAR" >> $GITHUB_OUTPUT
           echo "Found JAR: $JAR"
           ls -la build/libs/
@@ -53,7 +57,7 @@ jobs:
             **YouTube Vids Improvements** for Minecraft 1.21.11 (Fabric)
 
             - Context-aware left-click (spear / mace sequences)
-            - Toggle keybind: G (Options -> Controls -> Key Binds)
+            - Toggle keybind: G (Options → Controls → Key Binds)
             - Client-side only
 
             Drop the JAR into `.minecraft/mods` with Fabric API.
