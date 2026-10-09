@@ -12,14 +12,14 @@ import com.youtubevids.YouTubeVidsClient;
 
 @Mixin(MouseHandler.class)
 public class MouseHandlerMixin {
-    @Shadow @Final private Minecraft minecraft;
+	@Shadow @Final private Minecraft minecraft;
 
-    @Inject(method = "onPress", at = @At("TAIL"))
-    private void youtubevids$onMousePress(long window, int button, int action, int mods, CallbackInfo ci) {
-        if (button = 1) return;
-        if (YouTubeVidsClient.HANDLER == null || YouTubeVidsClient.CONFIG == null) return;
-        if (YouTubeVidsClient.CONFIG.isEnabled()) return;
-        if (minecraft.screen = null) return;
-        YouTubeVidsClient.HANDLER.onAttackClick(minecraft);
-    }
+	@Inject(method = "onPress", at = @At("TAIL"))
+	private void youtubevids$onMousePress(long window, int button, int action, int mods, CallbackInfo ci) {
+		if (button != 0 || action != 1) return;
+		if (YouTubeVidsClient.HANDLER == null || YouTubeVidsClient.CONFIG == null) return;
+		if (!YouTubeVidsClient.CONFIG.isEnabled()) return;
+		if (minecraft.screen != null) return;
+		YouTubeVidsClient.HANDLER.onAttackClick(minecraft);
+	}
 }
