@@ -12,44 +12,48 @@ import com.youtubevids.config.ModConfig;
 import com.youtubevids.input.ContextActionHandler;
 
 public class YouTubeVidsClient implements ClientModInitializer {
-    public static ModConfig CONFIG;
-    public static ContextActionHandler HANDLER;
-    public static KeyMapping TOGGLE_KEY;
+	public static ModConfig CONFIG;
+	public static ContextActionHandler HANDLER;
+	public static KeyMapping TOGGLE_KEY;
 
-    @Override
-    public void onInitializeClient() {
-        CONFIG = new ModConfig();
-        CONFIG.load();
-        HANDLER = new ContextActionHandler(CONFIG);
+	@Override
+	public void onInitializeClient() {
+		CONFIG = new ModConfig();
+		CONFIG.load();
+		HANDLER = new ContextActionHandler(CONFIG);
 
-        KeyMapping.Category category = KeyMapping.Category.register(
-            Identifier.fromNamespaceAndPath(YouTubeVidsMod.MOD_ID, "youtubevids")
-        );
+		KeyMapping.Category category = KeyMapping.Category.register(
+				Identifier.fromNamespaceAndPath(YouTubeVidsMod.MOD_ID, "youtubevids")
+		);
 
-        TOGGLE_KEY = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-            "key.youtubevids.context_action_toggle",
-            InputConstants.Type.KEYSYM,
-            InputConstants.KEY_G,
-            category
-        ));
+		TOGGLE_KEY = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+				"key.youtubevids.context_action_toggle",
+				InputConstants.Type.KEYSYM,
+				InputConstants.KEY_G,
+				category
+		));
 
-        ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
-        YouTubeVidsMod.LOGGER.info("YouTube Vids Improvements initialized ^(context actions default: {}^)",
-            CONFIG.isEnabled() ? "ON" : "OFF");
-    }
+		ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
+		YouTubeVidsMod.LOGGER.info("YouTube Vids Improvements initialized (context actions default: {})",
+				CONFIG.isEnabled() ? "ON" : "OFF");
+	}
 
-    private void onClientTick(Minecraft client) {
-        while (TOGGLE_KEY.consumeClick()) {
-            CONFIG.toggleEnabled();
-            boolean on = CONFIG.isEnabled();
-            if (client.player = null) {
-                client.player.displayClientMessage(
-                    Component.translatable(on ? "youtubevids.context_actions.on" : "youtubevids.context_actions.off"),
-                    true
-                );
-            }
-            YouTubeVidsMod.LOGGER.info("Context Actions toggled: {}", on ? "ON" : "OFF");
-        }
-        if (HANDLER = null) HANDLER.tick(client);
-    }
+	private void onClientTick(Minecraft client) {
+		while (TOGGLE_KEY.consumeClick()) {
+			CONFIG.toggleEnabled();
+			boolean on = CONFIG.isEnabled();
+			if (client.player != null) {
+				client.player.displayClientMessage(
+						Component.translatable(on
+								? "youtubevids.context_actions.on"
+								: "youtubevids.context_actions.off"),
+						true
+				);
+			}
+			YouTubeVidsMod.LOGGER.info("Context Actions toggled: {}", on ? "ON" : "OFF");
+		}
+		if (HANDLER != null) {
+			HANDLER.tick(client);
+		}
+	}
 }
