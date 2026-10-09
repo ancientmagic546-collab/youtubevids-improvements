@@ -3,6 +3,7 @@ package com.youtubevids.input;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
@@ -17,7 +18,14 @@ import com.youtubevids.config.ModConfig;
 
 public final class ContextActionHandler {
 	private final ModConfig config;
-	private enum Phase { IDLE, WAIT_AFTER_ATTACK, SWITCH_WEAPON, PERFORM_WEAPON_ATTACK, RETURN_SLOT }
+
+	private enum Phase {
+		IDLE,
+		WAIT_AFTER_ATTACK,
+		PERFORM_WEAPON_ATTACK,
+		RETURN_SLOT
+	}
+
 	private Phase phase = Phase.IDLE;
 	private int ticksRemaining;
 	private int originalSlot = -1;
@@ -32,6 +40,7 @@ public final class ContextActionHandler {
 		if (!config.isEnabled()) return false;
 		if (client.player == null || client.level == null || client.gameMode == null) return false;
 		if (client.screen != null) return false;
+
 		LocalPlayer player = client.player;
 		if (player.isSpectator() || !player.isAlive()) return false;
 		if (sequenceActive) return false;
@@ -41,27 +50,40 @@ public final class ContextActionHandler {
 		if (action == ActionType.NONE) return false;
 
 		int weaponSlot = findWeaponSlot(player.getInventory(), action);
-		if (weaponSlot < 0) return false;
+		if (weaponSlot < 0) {
+			YouTubeVidsMod.LOGGER.info("Context action skipped: no weapon slot for {}", action);
+			return false;
+		}
 
 		originalSlot = player.getInventory().getSelectedSlot();
 		targetSlot = weaponSlot;
 		phase = Phase.WAIT_AFTER_ATTACK;
 		ticksRemaining = Math.max(0, config.getActionDelayTicks());
 		sequenceActive = true;
-		YouTubeVidsMod.LOGGER.debug("Context action started: {} -> slot {}", action, weaponSlot);
+		YouTubeVidsMod.LOGGER.info("Context action: {} held, switch to slot {} then attack", action, weaponSlot + 1);
 		return true;
 	}
 
 	public void tick(Minecraft client) {
 		if (!sequenceActive || phase == Phase.IDLE) return;
-		if (client.player == null || client.gameMode == null) { cancel(); return; }
-		if (client.screen != null) { cancel(); return; }
+		if (client.player == null || client.gameMode == null) {
+			cancel();
+			return;
+		}
+		if (client.screen != null) {
+			cancel();
+			return;
+		}
+
 		LocalPlayer player = client.player;
-		if (ticksRemaining > 0) { ticksRemaining--; return; }
+		if (ticksRemaining > 0) {
+			ticksRemaining--;
+			return;
+		}
 
 		switch (phase) {
 			case WAIT_AFTER_ATTACK -> {
-				player.getInventory().setSelectedSlot(targetSlot);
+				selectHotbarSlot(client, player, targetSlot);
 				phase = Phase.PERFORM_WEAPON_ATTACK;
 				ticksRemaining = Math.max(0, config.getActionDelayTicks());
 			}
@@ -75,10 +97,20 @@ public final class ContextActionHandler {
 				}
 			}
 			case RETURN_SLOT -> {
-				player.getInventory().setSelectedSlot(originalSlot);
+				selectHotbarSlot(client, player, originalSlot);
 				finish();
 			}
 			default -> finish();
+		}
+	}
+
+	/** Change hotbar slot on client AND tell the server. */
+	private void selectHotbarSlot(Minecraft client, LocalPlayer player, int slot) {
+		if (slot < 0 || slot > 8) return;
+		player.getInventory().setSelectedSlot(slot);
+		// Critical: server must know the new selected slot
+		if (client.getConnection() != null) {
+			client.getConnection().send(new ServerboundSetCarriedItemPacket(slot));
 		}
 	}
 
@@ -102,14 +134,32 @@ public final class ContextActionHandler {
 		finish();
 	}
 
-	private enum ActionType { NONE, TO_SPEAR, TO_MACE }
+	private enum ActionType {
+		NONE,
+		TO_SPEAR,
+		TO_MACE
+	}
 
 	private ActionType resolveAction(ItemStack held) {
-		if (held.isEmpty()) return config.isEmptyHandToSpear() ? ActionType.TO_SPEAR : ActionType.NONE;
-		if (held.is(Items.WIND_CHARGE)) return config.isWindChargeToSpear() ? ActionType.TO_SPEAR : ActionType.NONE;
-		if (isSword(held)) return config.isSwordToMace() ? ActionType.TO_MACE : ActionType.NONE;
-		if (isSpear(held)) return config.isSpearToMace() ? ActionType.TO_MACE : ActionType.NONE;
+		if (held.isEmpty()) {
+			return config.isEmptyHandToSpear() ? ActionType.TO_SPEAR : ActionType.NONE;
+		}
+		if (isWindCharge(held)) {
+			return config.isWindChargeToSpear() ? ActionType.TO_SPEAR : ActionType.NONE;
+		}
+		if (isSword(held)) {
+			return config.isSwordToMace() ? ActionType.TO_MACE : ActionType.NONE;
+		}
+		if (isSpear(held)) {
+			return config.isSpearToMace() ? ActionType.TO_MACE : ActionType.NONE;
+		}
 		return ActionType.NONE;
+	}
+
+	private boolean isWindCharge(ItemStack stack) {
+		if (stack.is(Items.WIND_CHARGE)) return true;
+		Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+		return id != null && id.getPath().equals("wind_charge");
 	}
 
 	private boolean isSword(ItemStack stack) {
@@ -123,15 +173,12 @@ public final class ContextActionHandler {
 				|| item == Items.IRON_SWORD
 				|| item == Items.GOLDEN_SWORD
 				|| item == Items.DIAMOND_SWORD
-				|| item == Items.NETHERITE_SWORD;
+				|| item == Items.NETHERITE_SWORD
+				|| pathEndsWith(stack, "_sword");
 	}
 
 	private boolean isSpear(ItemStack stack) {
-		Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-		if (id != null) {
-			String path = id.getPath();
-			if (path.endsWith("_spear") || path.equals("spear")) return true;
-		}
+		if (pathEndsWith(stack, "_spear") || pathEquals(stack, "spear")) return true;
 		try {
 			for (TagKey<Item> tag : stack.getTags().toList()) {
 				if (tag.location().getPath().contains("spear")) return true;
@@ -142,20 +189,52 @@ public final class ContextActionHandler {
 	}
 
 	private boolean isMace(ItemStack stack) {
-		return stack.is(Items.MACE);
+		if (stack.is(Items.MACE)) return true;
+		return pathEquals(stack, "mace");
 	}
 
+	private boolean pathEndsWith(ItemStack stack, String suffix) {
+		Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+		return id != null && id.getPath().endsWith(suffix);
+	}
+
+	private boolean pathEquals(ItemStack stack, String path) {
+		Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+		return id != null && id.getPath().equals(path);
+	}
+
+	/**
+	 * Defaults: spear = hotbar slot 2 (index 1), mace = hotbar slot 3 (index 2).
+	 * Uses preferred slot from config if set; otherwise searches hotbar.
+	 */
 	private int findWeaponSlot(Inventory inv, ActionType action) {
 		int preferred = action == ActionType.TO_SPEAR
 				? config.getPreferredSpearSlot()
 				: config.getPreferredMaceSlot();
+
+		// Your layout: slot 2 = spear, slot 3 = mace (1-based UI → 0-based index)
+		if (preferred < 0) {
+			preferred = action == ActionType.TO_SPEAR ? 1 : 2;
+		}
+
 		if (preferred >= 0 && preferred <= 8) {
-			if (matches(inv.getItem(preferred), action)) return preferred;
+			ItemStack stack = inv.getItem(preferred);
+			// Prefer configured slot even if empty check fails — user layout is trusted
+			if (!stack.isEmpty() && matches(stack, action)) {
+				return preferred;
+			}
+			// Still use preferred slot if user put the weapon there (trust layout)
+			if (!stack.isEmpty()) {
+				return preferred;
+			}
 		}
+
 		for (int i = 0; i < 9; i++) {
-			if (matches(inv.getItem(i), action)) return i;
+			if (matches(inv.getItem(i), action)) {
+				return i;
+			}
 		}
-		return -1;
+		return preferred >= 0 && preferred <= 8 ? preferred : -1;
 	}
 
 	private boolean matches(ItemStack stack, ActionType action) {
