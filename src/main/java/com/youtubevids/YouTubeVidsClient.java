@@ -16,6 +16,9 @@ public class YouTubeVidsClient implements ClientModInitializer {
 	public static ContextActionHandler HANDLER;
 	public static KeyMapping TOGGLE_KEY;
 
+	/** Previous tick attack-key state for rising-edge detection */
+	private boolean wasAttackDown = false;
+
 	@Override
 	public void onInitializeClient() {
 		CONFIG = new ModConfig();
@@ -39,6 +42,7 @@ public class YouTubeVidsClient implements ClientModInitializer {
 	}
 
 	private void onClientTick(Minecraft client) {
+		// Toggle key
 		while (TOGGLE_KEY.consumeClick()) {
 			CONFIG.toggleEnabled();
 			boolean on = CONFIG.isEnabled();
@@ -52,6 +56,18 @@ public class YouTubeVidsClient implements ClientModInitializer {
 			}
 			YouTubeVidsMod.LOGGER.info("Context Actions toggled: {}", on ? "ON" : "OFF");
 		}
+
+		// Rising edge of attack (left click) — does not consume the vanilla click
+		boolean attackDown = client.options.keyAttack.isDown();
+		if (attackDown && !wasAttackDown
+				&& CONFIG != null && CONFIG.isEnabled()
+				&& HANDLER != null
+				&& client.player != null
+				&& client.screen == null) {
+			HANDLER.onAttackClick(client);
+		}
+		wasAttackDown = attackDown;
+
 		if (HANDLER != null) {
 			HANDLER.tick(client);
 		}
